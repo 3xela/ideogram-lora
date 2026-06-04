@@ -13,7 +13,7 @@ Pipeline:
 Example:
   python train_lora.py \
     --model ideogram-ai/ideogram-4-nf4 \
-    --data ./dataset_example \
+    --data ./dataset_penguin \
     --output ./runs/test_lora \
     --resolution 1024 --rank 16 --learning_rate 1e-4 --max_train_steps 500
 
@@ -32,8 +32,8 @@ import torch.utils.checkpoint as cp
 from PIL import Image
 from tqdm import tqdm
 
-import flow_utils
-from lora import (
+from . import flow_utils
+from .lora import (
     LoRAConfig,
     count_parameters,
     inject_lora,

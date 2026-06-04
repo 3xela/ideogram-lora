@@ -1,6 +1,0 @@
-{
-  "description": "A high contrast club flyer.",
-  "style": "grainy photocopied punk zine aesthetic",
-  "text": [{"content": "NO SIGNAL", "placement": "center", "style": "large distorted uppercase lettering"}],
-  "palette": ["#000000", "#ffffff", "#d8d8d8"]
-}

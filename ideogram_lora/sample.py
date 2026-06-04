@@ -18,7 +18,9 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
+from pathlib import Path
 
 import torch
 
@@ -40,9 +42,49 @@ def parse_args() -> argparse.Namespace:
     return ap.parse_args()
 
 
-def generate(pipe, args):
+def resolve_caption(prompt_arg: str) -> str:
+    """Turn ``--prompt`` (raw string, or a path to a .json/.txt file) into the
+    caption string fed to the model.
+
+    Ideogram 4 is trained on single-line JSON captions, so we prefer them: JSON
+    is normalized (``aspect_ratio`` dropped, the model never sees it, and keys
+    reordered to the schema) and validated with the package's CaptionVerifier.
+    Plain text still passes through, with a note that it's out-of-distribution
+    (and thus likelier to trip the gray safety placeholder).
+    """
+    text = prompt_arg
+    p = Path(prompt_arg)
+    if p.exists() and p.suffix.lower() in (".json", ".txt"):
+        text = p.read_text(encoding="utf-8")
+    text = text.strip()
+
+    try:
+        obj = json.loads(text)
+    except json.JSONDecodeError:
+        print("  prompt: plain text (tip: JSON captions are in-distribution and "
+              "less likely to trip the safety placeholder)")
+        return text
+    if not isinstance(obj, dict):
+        return text
+
+    from ideogram4.caption_verifier import CaptionVerifier
+    from ideogram4.magic_prompt import reorder_caption_keys
+
+    obj.pop("aspect_ratio", None)
+    obj = reorder_caption_keys(obj)
+    warnings = CaptionVerifier().verify(obj)
+    if warnings:
+        print("  caption warnings:")
+        for w in warnings:
+            print(f"    - {w}")
+    else:
+        print("  prompt: valid JSON caption")
+    return json.dumps(obj, ensure_ascii=False, separators=(",", ":"))
+
+
+def generate(pipe, caption, args):
     return pipe(
-        args.prompt,
+        caption,
         height=args.height,
         width=args.width,
         num_steps=args.steps,
@@ -54,6 +96,7 @@ def generate(pipe, args):
 
 def main() -> None:
     args = parse_args()
+    caption = resolve_caption(args.prompt)
     device = torch.device(args.device)
     dtype = getattr(torch, args.dtype)
 
@@ -67,24 +110,24 @@ def main() -> None:
     )
 
     if args.compare:
-        from make_grid import grid_from_images
+        from .make_grid import grid_from_images
 
         out_base = args.output[:-4] if args.output.endswith(".png") else args.output
         os.makedirs(os.path.dirname(out_base) or ".", exist_ok=True)
 
         print("Generating BASE ...")
-        base_img = generate(pipe, args)
+        base_img = generate(pipe, caption, args)
         base_path = f"{out_base}_base.png"
         base_img.save(base_path)
 
         if not args.lora:
             raise SystemExit("--compare needs --lora to compare against")
-        from lora import apply_lora_checkpoint
+        from .lora import apply_lora_checkpoint
 
         print(f"Applying LoRA {args.lora} ...")
         apply_lora_checkpoint(pipe.conditional_transformer, args.lora)
         print("Generating LoRA ...")
-        lora_img = generate(pipe, args)
+        lora_img = generate(pipe, caption, args)
         lora_path = f"{out_base}_lora.png"
         lora_img.save(lora_path)
 
@@ -95,12 +138,12 @@ def main() -> None:
         return
 
     if args.lora:
-        from lora import apply_lora_checkpoint
+        from .lora import apply_lora_checkpoint
 
         print(f"Applying LoRA {args.lora} ...")
         apply_lora_checkpoint(pipe.conditional_transformer, args.lora)
 
-    img = generate(pipe, args)
+    img = generate(pipe, caption, args)
     os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
     img.save(args.output)
     print(f"Saved {args.output}")
