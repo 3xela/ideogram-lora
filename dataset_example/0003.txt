@@ -1,0 +1,6 @@
+{
+  "description": "A high-contrast zine cover with bold typography.",
+  "style": "grainy photocopied punk aesthetic, deep indigo background",
+  "text": [{"content": "VECTOR DREAMS", "placement": "center", "style": "large uppercase lettering"}],
+  "palette": ["#14141c", "#e8e0ff"]
+}

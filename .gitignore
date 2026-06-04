@@ -1,0 +1,33 @@
+# Never commit model weights or trained adapters by default.
+*.safetensors
+*.ckpt
+*.pt
+*.bin
+
+# Runs / outputs (keep examples/ checked in by exception below).
+runs/
+samples/
+cache/
+wandb/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.venv-test/
+.uv/
+*.egg-info/
+build/
+dist/
+
+# HF / local caches
+.cache/
+
+# OS
+.DS_Store
+
+# Local harness / editor config
+.claude/
+
+# Allow the curated example outputs to be committed.
+!examples/outputs/*.png
