@@ -69,6 +69,13 @@ See `examples/prompts/penguin.json` for the schema:
    "elements":[{"type":"obj","desc":"... one subject per element ..."}]}}
 ```
 
+## Roadmap
+
+- Advanced run configuration: declarative config files instead of long CLI flag lists.
+- Layer selection: train specific layer ranges or set per-layer rank/alpha, beyond the current module-family presets (which apply across all 34 layers).
+- High-resolution training: validated 768/1024 presets plus the memory tricks (gradient checkpointing, latent bucketing) to make it practical past the 512 demo default.
+- fp8 weights: use the `ideogram-4-fp8` build on H100 (FP8 tensor cores) for faster training and inference than the nf4 dequant path.
+
 ## License
 
 The scaffold **code** is MIT (see `LICENSE`). It does not cover the Ideogram 4
