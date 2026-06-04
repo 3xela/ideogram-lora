@@ -1,0 +1,1 @@
+{"high_level_description":"A photograph of a penguin chick under gently falling snow.","compositional_deconstruction":{"background":"Soft snow-covered ground with faint falling snow, blurred cool-grey backdrop.","elements":[{"type":"obj","desc":"A penguin, black back and head, white belly, orange beak and webbed feet. Round fluffy chick standing upright, looking forward."}]}}

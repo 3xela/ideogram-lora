@@ -100,9 +100,11 @@ class LoRALinear(nn.Module):
         # exactly until training updates the weights.
         nn.init.normal_(self.lora_A.weight, std=1.0 / rank)
         nn.init.zeros_(self.lora_B.weight)
-        # LoRA params train in fp32 for stability even when the base is bf16/nf4.
-        self.lora_A.to(torch.float32)
-        self.lora_B.to(torch.float32)
+        # LoRA params train in fp32 for stability even when the base is bf16/nf4,
+        # but must live on the same device as the (frozen) base layer.
+        base_device = next(self.base.parameters()).device
+        self.lora_A.to(device=base_device, dtype=torch.float32)
+        self.lora_B.to(device=base_device, dtype=torch.float32)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         out = self.base(x)

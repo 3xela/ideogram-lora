@@ -1,0 +1,1 @@
+{"high_level_description":"A photograph of a penguin standing on a snowy iceberg.","compositional_deconstruction":{"background":"A snowy iceberg surface receding into a softly blurred cool-grey backdrop.","elements":[{"type":"obj","desc":"A penguin, black back and head, white belly, orange beak and webbed feet. Standing upright, facing forward."}]}}

@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "ideogram4-lora-starter"
 version = "0.1.0"
@@ -9,7 +13,7 @@ keywords = ["lora", "text-to-image", "flow-matching", "ideogram", "fine-tuning"]
 
 dependencies = [
   "torch>=2.11",
-  "ideogram4",
+  "ideogram-4",
   "transformers>=4.49.0",
   "safetensors>=0.4.5",
   "huggingface_hub>=0.26.0",
@@ -22,9 +26,15 @@ dependencies = [
   "tqdm",
 ]
 
-# `ideogram4` is not on PyPI yet; install it straight from GitHub.
+[project.scripts]
+ilora = "ideogram_lora.cli:main"
+
+[tool.setuptools]
+packages = ["ideogram_lora"]
+
+# `ideogram-4` is not on PyPI yet; install it straight from GitHub.
 [tool.uv.sources]
-ideogram4 = { git = "https://github.com/ideogram-oss/ideogram4" }
+ideogram-4 = { git = "https://github.com/ideogram-oss/ideogram4" }
 
 [tool.ruff]
 line-length = 100

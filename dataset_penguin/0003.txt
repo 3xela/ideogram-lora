@@ -1,0 +1,1 @@
+{"high_level_description":"A photograph of a penguin sitting on a smooth grey rock.","compositional_deconstruction":{"background":"A smooth grey rock surface with a softly blurred cool backdrop.","elements":[{"type":"obj","desc":"A penguin, black back and head, white belly, orange beak and webbed feet. Sitting low on its belly, head up."}]}}

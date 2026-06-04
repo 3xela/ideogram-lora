@@ -1,0 +1,1 @@
+{"high_level_description":"A photograph of a penguin beside a small fish by the water.","compositional_deconstruction":{"background":"Wet pebbled shoreline by calm water, softly blurred cool backdrop.","elements":[{"type":"obj","desc":"A penguin, black back and head, white belly, orange beak and webbed feet. Standing upright beside a small fish, looking down at it."}]}}

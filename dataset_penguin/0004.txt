@@ -1,0 +1,1 @@
+{"high_level_description":"A photograph of a penguin looking up with both flippers raised.","compositional_deconstruction":{"background":"Pale snow-dusted ground receding into a softly blurred cool-grey backdrop.","elements":[{"type":"obj","desc":"A penguin, black back and head, white belly, orange beak and webbed feet. Head tilted up, both flippers raised outward."}]}}

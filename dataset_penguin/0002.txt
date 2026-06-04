@@ -1,0 +1,1 @@
+{"high_level_description":"A photograph of a penguin mid-waddle on pale blue ice.","compositional_deconstruction":{"background":"Pale blue ice surface receding into a softly blurred cool-grey backdrop.","elements":[{"type":"obj","desc":"A penguin, black back and head, white belly, orange beak and webbed feet. Leaning forward mid-waddle, flippers held slightly out."}]}}

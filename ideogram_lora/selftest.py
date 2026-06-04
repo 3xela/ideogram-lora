@@ -22,8 +22,8 @@ import tempfile
 import torch
 import torch.nn as nn
 
-import flow_utils
-from lora import (
+from . import flow_utils
+from .lora import (
     LoRAConfig,
     LoRALinear,
     apply_lora_checkpoint,
@@ -180,8 +180,12 @@ def test_lora_inject_and_train():
         check("reloaded adapter matches", torch.allclose(after, reloaded, atol=1e-5))
 
 
-if __name__ == "__main__":
+def main() -> None:
     test_patchify_roundtrip()
     test_flow_targets()
     test_lora_inject_and_train()
     print("\nAll self-tests passed.")
+
+
+if __name__ == "__main__":
+    main()
