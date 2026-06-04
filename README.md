@@ -27,7 +27,7 @@ Weights are **gated**. Accept the license on the `ideogram-ai/ideogram-4-nf4`
 model page, then authenticate:
 
 ```bash
-uv run hf auth login        # paste a token from huggingface.co/settings/tokens
+uv run hf auth login 
 ```
 
 No weights are bundled; the first run downloads them (~20GB) to your HF cache.
