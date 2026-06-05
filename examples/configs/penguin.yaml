@@ -8,7 +8,7 @@ output: ./runs/penguin_clay
 
 # LoRA / model
 model: ideogram-ai/ideogram-4-nf4
-resolution: 512
+resolution: 1024
 rank: 16
 alpha: 8.0
 lora_dropout: 0.0
