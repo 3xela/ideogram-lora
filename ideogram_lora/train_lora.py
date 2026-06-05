@@ -3,9 +3,10 @@
 Pipeline:
   1. Load Ideogram 4 (gated weights via your HF token).
   2. Pre-encode every sample once: image -> VAE latent, caption -> Qwen3-VL
-     features. Cached on CPU so the text encoder, VAE, and the unconditional
-     transformer can be freed before training (this is what keeps it on a
-     single ~40GB GPU).
+     features. The text encoder, VAE, and unconditional transformer are then
+     freed, leaving only the cache + conditional transformer resident. The
+     cache stays on the GPU by default (no per-step host copies); pass
+     --cache_device cpu to offload it for datasets too large to keep resident.
   3. Inject LoRA into the conditional transformer, freeze everything else.
   4. Flow-matching loss, AdamW on the adapter only.
   5. Save lora.safetensors + lora_config.json.
@@ -66,6 +67,12 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--t_sample_std", type=float, default=1.0)
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--device", default="cuda")
+    ap.add_argument(
+        "--cache_device",
+        default=None,
+        help="where the pre-encoded latent/text cache lives "
+        "(default: same as --device). Use 'cpu' to offload for large datasets.",
+    )
     ap.add_argument("--dtype", default="bfloat16", choices=["bfloat16", "float16"])
     ap.add_argument(
         "--gradient_checkpointing",
@@ -138,6 +145,7 @@ def main() -> None:
         raise SystemExit(f"--resolution must be a multiple of {patch_px}")
 
     device = torch.device(args.device)
+    cache_device = torch.device(args.cache_device) if args.cache_device else device
     dtype = getattr(torch, args.dtype)
 
     print(f"Discovering dataset in {args.data} ...")
@@ -181,11 +189,13 @@ def main() -> None:
 
         cache.append(
             {
-                "clean": clean.squeeze(0).to("cpu", torch.bfloat16),
-                "text_feats": llm[:, :num_text].squeeze(0).to("cpu", torch.bfloat16),
-                "position_ids": inputs["position_ids"].squeeze(0).cpu(),
-                "segment_ids": inputs["segment_ids"].squeeze(0).cpu(),
-                "indicator": inputs["indicator"].squeeze(0).cpu(),
+                # Stored in their training dtype/device so the loop touches them
+                # directly -- no per-step host->device copy or dtype cast.
+                "clean": clean.squeeze(0).to(cache_device, torch.float32),
+                "text_feats": llm[:, :num_text].squeeze(0).to(cache_device, dtype),
+                "position_ids": inputs["position_ids"].squeeze(0).to(cache_device),
+                "segment_ids": inputs["segment_ids"].squeeze(0).to(cache_device),
+                "indicator": inputs["indicator"].squeeze(0).to(cache_device),
                 "num_text": num_text,
                 "num_img": num_img,
             }
@@ -196,6 +206,14 @@ def main() -> None:
     pipe.text_tokenizer = None
     pipe.autoencoder = None
     torch.cuda.empty_cache()
+
+    cache_bytes = sum(
+        t.element_size() * t.nelement()
+        for s in cache
+        for t in s.values()
+        if torch.is_tensor(t)
+    )
+    print(f"  cache: {len(cache)} sample(s), {cache_bytes / 1e6:.0f} MB on {cache_device}")
 
     # ---- Attach LoRA to the conditional transformer. ----
     tf = pipe.conditional_transformer
@@ -237,11 +255,13 @@ def main() -> None:
 
             num_text, num_img = s["num_text"], s["num_img"]
             L = num_text + num_img
-            clean = s["clean"].unsqueeze(0).to(device, torch.float32)  # (1, num_img, 128)
-            text_feats = s["text_feats"].unsqueeze(0).to(device, dtype)
-            position_ids = s["position_ids"].unsqueeze(0).to(device)
-            segment_ids = s["segment_ids"].unsqueeze(0).to(device)
-            indicator = s["indicator"].unsqueeze(0).to(device)
+            # No-ops when the cache is on `device` (the default); real, overlapped
+            # transfers only under --cache_device cpu.
+            clean = s["clean"].unsqueeze(0).to(device, non_blocking=True)  # (1, num_img, 128)
+            text_feats = s["text_feats"].unsqueeze(0).to(device, non_blocking=True)
+            position_ids = s["position_ids"].unsqueeze(0).to(device, non_blocking=True)
+            segment_ids = s["segment_ids"].unsqueeze(0).to(device, non_blocking=True)
+            indicator = s["indicator"].unsqueeze(0).to(device, non_blocking=True)
 
             llm_full = torch.zeros(1, L, feat_dim, device=device, dtype=dtype)
             llm_full[:, :num_text] = text_feats
