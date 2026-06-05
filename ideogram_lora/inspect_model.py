@@ -28,11 +28,14 @@ def main() -> None:
 
     from ideogram4 import Ideogram4Pipeline, Ideogram4PipelineConfig
 
+    from .fast_init import no_init_weights
+
     cfg = Ideogram4PipelineConfig(weights_repo=args.model)
     print(f"Loading {args.model} (this downloads gated weights on first run)...")
-    pipe = Ideogram4Pipeline.from_pretrained(
-        config=cfg, device=args.device, dtype=getattr(torch, args.dtype)
-    )
+    with no_init_weights():  # the checkpoint overwrites every weight; skip the slow RNG init
+        pipe = Ideogram4Pipeline.from_pretrained(
+            config=cfg, device=args.device, dtype=getattr(torch, args.dtype)
+        )
 
     print("\nPipeline components:")
     for name in (

@@ -1,0 +1,31 @@
+# Declarative training config for `ilora train --config <this file>`.
+# Keys are the train flag names without the leading `--`. Anything omitted
+# falls back to the flag default; any flag passed on the CLI overrides what's
+# here (so you can keep a base config and tweak one knob per run).
+
+data: ./dataset_penguin
+output: ./runs/penguin_clay
+
+# LoRA / model
+model: ideogram-ai/ideogram-4-nf4
+resolution: 512
+rank: 16
+alpha: 8.0
+lora_dropout: 0.0
+target_modules: attention_mlp        # attention | attention_mlp | all_linear, or a comma list
+
+# Optimisation
+learning_rate: 2.0e-4                 # note: write the exponent with a dot (2.0e-4), not 2e-4
+max_train_steps: 500
+gradient_accumulation_steps: 4
+checkpoint_every: 100
+t_sample_mean: 0.0
+t_sample_std: 1.0
+seed: 42
+
+# Runtime
+device: cuda
+cache_device: cuda                    # cpu to offload the pre-encoded cache for large datasets
+dtype: bfloat16                       # bfloat16 | float16
+gradient_checkpointing: true
+vae_sample: true

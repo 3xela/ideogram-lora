@@ -106,11 +106,14 @@ def main() -> None:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
 
-    pipe = Ideogram4Pipeline.from_pretrained(
-        config=Ideogram4PipelineConfig(weights_repo=args.model),
-        device=torch.device("cuda"),
-        dtype=torch.bfloat16,
-    )
+    from .fast_init import no_init_weights
+
+    with no_init_weights():  # the checkpoint overwrites every weight; skip the slow RNG init
+        pipe = Ideogram4Pipeline.from_pretrained(
+            config=Ideogram4PipelineConfig(weights_repo=args.model),
+            device=torch.device("cuda"),
+            dtype=torch.bfloat16,
+        )
 
     for i, (subject, pose, background, seed) in enumerate(SCENES, start=1):
         gen = gen_caption(subject, pose, background)

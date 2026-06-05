@@ -87,11 +87,14 @@ def main() -> None:
         raise SystemExit(f"no checkpoints found under {run}")
     print("checkpoints:", [c[0] for c in ckpts], flush=True)
 
-    pipe = Ideogram4Pipeline.from_pretrained(
-        config=Ideogram4PipelineConfig(weights_repo=args.model),
-        device=torch.device("cuda"),
-        dtype=torch.bfloat16,
-    )
+    from .fast_init import no_init_weights
+
+    with no_init_weights():  # the checkpoint overwrites every weight; skip the slow RNG init
+        pipe = Ideogram4Pipeline.from_pretrained(
+            config=Ideogram4PipelineConfig(weights_repo=args.model),
+            device=torch.device("cuda"),
+            dtype=torch.bfloat16,
+        )
 
     def gen(cap: str) -> Image.Image:
         return pipe(cap, height=args.res, width=args.res, num_steps=args.steps,

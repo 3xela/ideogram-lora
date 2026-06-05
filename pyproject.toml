@@ -24,6 +24,7 @@ dependencies = [
   "pillow",
   "numpy",
   "tqdm",
+  "pyyaml>=6.0",
 ]
 
 [project.scripts]
