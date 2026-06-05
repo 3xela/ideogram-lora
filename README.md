@@ -7,7 +7,7 @@ base-vs-LoRA comparisons.
 
 > Unofficial, experimental, **non-commercial**. Not affiliated with Ideogram.
 
-![base vs LoRA across training checkpoints](examples/outputs/penguin_eval.png)
+![base vs LoRA across training checkpoints](examples/outputs/penguin_eval_1024.png)
 
 ## Setup
 
