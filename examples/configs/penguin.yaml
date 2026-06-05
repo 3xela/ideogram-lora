@@ -12,7 +12,18 @@ resolution: 512
 rank: 16
 alpha: 8.0
 lora_dropout: 0.0
-target_modules: attention_mlp        # attention | attention_mlp | all_linear, or a comma list
+# A list of module suffixes, or a single preset name (attention | attention_qv |
+# attention_mlp | all_linear). The fused-qkv slices attention.q/.k/.v each target
+# one projection inside the shared qkv linear; attention.o is the output projection.
+target_modules:
+  - attention.q
+  - attention.k
+  - attention.v
+  - attention.o
+
+# Which transformer blocks to adapt. Omit (or leave empty) to adapt all 34.
+# Accepts ranges and/or indices, e.g. "0-9,28-33" or a list like [0, 5, 10].
+layers: "0-9"
 
 # Optimisation
 learning_rate: 2.0e-4                 # note: write the exponent with a dot (2.0e-4), not 2e-4

@@ -75,7 +75,14 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument(
         "--target_modules",
         default="attention",
-        help="preset (attention|attention_mlp|all_linear) or comma list of suffixes",
+        help="preset (attention|attention_qv|attention_mlp|all_linear) or comma list "
+        "of suffixes; fused-qkv slices attention.q/.k/.v target a single projection "
+        "(e.g. 'attention.q,attention.v,attention.o')",
+    )
+    ap.add_argument(
+        "--layers",
+        default=None,
+        help="block indices to adapt, e.g. '0-9,20-33' or '0,5,10' (default: all blocks)",
     )
     ap.add_argument("--learning_rate", type=float, default=1e-4)
     ap.add_argument("--max_train_steps", type=int, default=500)
@@ -126,6 +133,54 @@ def parse_args() -> argparse.Namespace:
     if not args.data or not args.output:
         ap.error("--data and --output are required (via CLI flags or --config)")
     return args
+
+
+def _parse_layers(spec) -> tuple[int, ...]:
+    """Block-index spec -> sorted unique indices. Accepts '0-9,20-33', '0,5,10',
+    a list ([0, 5, 10] or ['0-9', '20']), an int, or None/'' for all blocks."""
+    if spec is None or spec == "":
+        return ()
+    if isinstance(spec, int):
+        return (spec,)
+    items = spec if isinstance(spec, (list, tuple)) else str(spec).split(",")
+    out: list[int] = []
+    for it in items:
+        s = str(it).strip()
+        if not s:
+            continue
+        if "-" in s:
+            lo, hi = s.split("-", 1)
+            out.extend(range(int(lo), int(hi) + 1))
+        else:
+            out.append(int(s))
+    return tuple(sorted(set(out)))
+
+
+def _build_lora_config(args: argparse.Namespace) -> "LoRAConfig":
+    """Resolve --target_modules and --layers into a LoRAConfig.
+
+    target_modules accepts a preset name ("attention_mlp"), a CLI comma list
+    ("attention.q,attention.o"), or a YAML block list (already a Python list). A
+    list -- or any string with a "." / "," -- is an explicit module list; a bare
+    word is a preset. layers picks which blocks get adapted (empty = all).
+    """
+    spec = args.target_modules
+    if isinstance(spec, (list, tuple)):
+        modules = [str(s).strip() for s in spec if str(s).strip()]
+    elif "," in spec or "." in spec:
+        modules = [s.strip() for s in spec.split(",") if s.strip()]
+    else:
+        modules = []  # a bare preset name
+    return LoRAConfig(
+        rank=args.rank,
+        alpha=args.alpha,
+        dropout=args.lora_dropout,
+        target_preset=spec if not modules else "attention",
+        target_modules=tuple(modules),
+        layers=_parse_layers(args.layers),
+        base_model=args.model,
+        resolution=args.resolution,
+    )
 
 
 def discover_pairs(data_dir: str) -> list[tuple[Path, str]]:
@@ -260,18 +315,10 @@ def main() -> None:
 
     # ---- Attach LoRA to the conditional transformer. ----
     tf = pipe.conditional_transformer
-    targets = args.target_modules
-    cfg = LoRAConfig(
-        rank=args.rank,
-        alpha=args.alpha,
-        dropout=args.lora_dropout,
-        target_preset=targets if "." not in targets and "," not in targets else "attention",
-        target_modules=tuple(targets.split(",")) if ("." in targets or "," in targets) else (),
-        base_model=args.model,
-        resolution=args.resolution,
-    )
+    cfg = _build_lora_config(args)
     wrapped = inject_lora(tf, cfg)
-    print(f"Injected LoRA into {len(wrapped)} modules (targets: {cfg.resolved_targets()})")
+    scope = f"; layers {cfg.layers}" if cfg.layers else " (all layers)"
+    print(f"Injected LoRA into {len(wrapped)} modules (targets: {cfg.resolved_targets()}{scope})")
     trainable, total = count_parameters(tf)
     print(f"  trainable params: {trainable:,} / {total:,} ({100*trainable/total:.3f}%)")
 

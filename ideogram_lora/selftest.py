@@ -26,6 +26,7 @@ from . import flow_utils
 from .lora import (
     LoRAConfig,
     LoRALinear,
+    LoRASlicedLinear,
     apply_lora_checkpoint,
     count_parameters,
     inject_lora,
@@ -180,10 +181,79 @@ def test_lora_inject_and_train():
         check("reloaded adapter matches", torch.allclose(after, reloaded, atol=1e-5))
 
 
+def test_qkv_slice_targeting():
+    print("fused-qkv slice targeting (Q/K/V)")
+    torch.manual_seed(0)
+    d = 32
+    # The fused qkv emits [Q | K | V] as equal thirds of width d each.
+    base = nn.Linear(d, 3 * d, bias=False)
+    m = LoRASlicedLinear(base, rank=4, alpha=8, dropout=0.0, spans={"q": (0, d), "v": (2 * d, 3 * d)})
+    x = torch.randn(2, 5, d)
+
+    check("adapts only the requested spans", set(m.slices.keys()) == {"q", "v"})
+    check("no-op at init (B=0)", torch.allclose(m(x), base(x), atol=1e-6))
+
+    # Simulate a trained adapter: give the B matrices weight.
+    for name in ("q", "v"):
+        nn.init.normal_(m.slices[name]["lora_B"].weight, std=0.1)
+    diff = (m(x) - base(x)).abs()
+    check("Q span (0:d) adapted", diff[..., 0:d].max() > 1e-4)
+    check("V span (2d:3d) adapted", diff[..., 2 * d : 3 * d].max() > 1e-4)
+    check("K span (d:2d) untouched", torch.allclose(diff[..., d : 2 * d], torch.zeros(()), atol=1e-6))
+
+    # Inject into the tiny transformer via target tokens, train, save -> reload.
+    torch.manual_seed(0)
+    model = _TinyTransformer()
+    cfg = LoRAConfig(rank=4, alpha=8, target_modules=("attention.q", "attention.v", "attention.o"))
+    wrapped = inject_lora(model, cfg)
+    # 3 layers x (1 sliced qkv + 1 o) = 6 wrapped modules.
+    check("wrapped sliced qkv + o per layer", len(wrapped) == 6)
+    check("qkv became a sliced adapter", isinstance(model.layers[0].attention.qkv, LoRASlicedLinear))
+    check("o is a plain LoRALinear", isinstance(model.layers[0].attention.o, LoRALinear))
+
+    inp = torch.randn(2, 7, 32)
+    opt = torch.optim.AdamW(lora_parameters(model), lr=1e-2)
+    target = torch.randn(2, 7, 128)
+    for _ in range(3):
+        opt.zero_grad()
+        flow_utils.flow_loss(model(inp), target).backward()
+        opt.step()
+    with torch.no_grad():
+        trained = model(inp)
+
+    with tempfile.TemporaryDirectory() as dtmp:
+        save_lora(model, cfg, dtmp)
+        torch.manual_seed(0)
+        fresh = _TinyTransformer()
+        apply_lora_checkpoint(fresh, dtmp)
+        with torch.no_grad():
+            reloaded = fresh(inp)
+    check("sliced adapter reload matches", torch.allclose(trained, reloaded, atol=1e-5))
+
+
+def test_layer_targeting():
+    print("per-block layer targeting")
+    from .lora import LoRASlicedLinear  # noqa: F401 (already imported above)
+
+    # Tiny transformer has 3 blocks (layers.0/1/2).
+    torch.manual_seed(0)
+    model = _TinyTransformer()
+    cfg = LoRAConfig(rank=4, alpha=8, target_modules=("attention.q", "attention.o"), layers=(0, 2))
+    wrapped = inject_lora(model, cfg)
+    # 2 chosen blocks x (qkv slice + o) = 4; block 1 must be left alone.
+    check("only chosen blocks wrapped", len(wrapped) == 4)
+    check("block 0 qkv adapted", isinstance(model.layers[0].attention.qkv, LoRASlicedLinear))
+    check("block 1 qkv untouched", not isinstance(model.layers[1].attention.qkv, LoRASlicedLinear))
+    check("block 2 o adapted", isinstance(model.layers[2].attention.o, LoRALinear))
+    check("block 1 o untouched", not isinstance(model.layers[1].attention.o, LoRALinear))
+
+
 def main() -> None:
     test_patchify_roundtrip()
     test_flow_targets()
     test_lora_inject_and_train()
+    test_qkv_slice_targeting()
+    test_layer_targeting()
     print("\nAll self-tests passed.")
 
 
