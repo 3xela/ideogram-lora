@@ -45,11 +45,29 @@ from .lora import (
 IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp", ".bmp")
 
 
+def load_config(path: str) -> dict:
+    """Read a YAML mapping of train params (the keys are --flag names sans --)."""
+    import yaml
+
+    p = Path(path)
+    if not p.exists():
+        raise SystemExit(f"--config not found: {path}")
+    data = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+    if not isinstance(data, dict):
+        raise SystemExit(f"--config must be a YAML mapping, got {type(data).__name__}")
+    return data
+
+
 def parse_args() -> argparse.Namespace:
     ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument(
+        "--config",
+        help="path to a YAML file of params (keys = flag names without --); "
+        "explicit CLI flags override it",
+    )
     ap.add_argument("--model", default="ideogram-ai/ideogram-4-nf4")
-    ap.add_argument("--data", required=True, help="folder of <name>.<img> + <name>.txt")
-    ap.add_argument("--output", required=True)
+    ap.add_argument("--data", help="folder of <name>.<img> + <name>.txt")
+    ap.add_argument("--output")
     ap.add_argument("--resolution", type=int, default=1024)
     ap.add_argument("--rank", type=int, default=16)
     ap.add_argument("--alpha", type=float, default=16.0)
@@ -85,7 +103,29 @@ def parse_args() -> argparse.Namespace:
         default=True,
         help="sample the VAE posterior (vs. use the mean) when encoding latents",
     )
-    return ap.parse_args()
+    # Two-pass: --config values seed the defaults, then a normal parse lets any
+    # explicit CLI flag win over the YAML.
+    pre, _ = ap.parse_known_args()
+    if pre.config:
+        cfg = load_config(pre.config)
+        actions = {a.dest: a for a in ap._actions}
+        unknown = set(cfg) - set(actions)
+        if unknown:
+            raise SystemExit(f"--config has unknown keys: {', '.join(sorted(unknown))}")
+        coerced = {}
+        for key, val in cfg.items():
+            act = actions[key]
+            if act.type is not None and val is not None:
+                val = act.type(val)  # coerces YAML's "1e-4" string -> float, etc.
+            if act.choices and val not in act.choices:
+                raise SystemExit(f"--config: {key}={val!r} not in {act.choices}")
+            coerced[key] = val
+        ap.set_defaults(**coerced)
+
+    args = ap.parse_args()
+    if not args.data or not args.output:
+        ap.error("--data and --output are required (via CLI flags or --config)")
+    return args
 
 
 def discover_pairs(data_dir: str) -> list[tuple[Path, str]]:
@@ -156,12 +196,15 @@ def main() -> None:
 
     from ideogram4 import Ideogram4Pipeline, Ideogram4PipelineConfig
 
+    from .fast_init import no_init_weights
+
     print(f"Loading {args.model} (gated; downloads on first run) ...")
-    pipe = Ideogram4Pipeline.from_pretrained(
-        config=Ideogram4PipelineConfig(weights_repo=args.model),
-        device=device,
-        dtype=dtype,
-    )
+    with no_init_weights():  # the checkpoint overwrites every weight; skip the slow RNG init
+        pipe = Ideogram4Pipeline.from_pretrained(
+            config=Ideogram4PipelineConfig(weights_repo=args.model),
+            device=device,
+            dtype=dtype,
+        )
 
     # We only train the conditional branch; free the unconditional one now.
     pipe.unconditional_transformer = None

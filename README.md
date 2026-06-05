@@ -46,6 +46,10 @@ uv run ilora train --data ./dataset_penguin --output ./runs/penguin_clay \
     --resolution 512 --rank 16 --alpha 8 --learning_rate 2e-4 \
     --target_modules attention_mlp --max_train_steps 500 --checkpoint_every 100
 
+# ...or keep the params in a YAML file (CLI flags still override it):
+uv run ilora train --config examples/configs/penguin.yaml
+uv run ilora train --config examples/configs/penguin.yaml --max_train_steps 1000
+
 uv run ilora sample --lora ./runs/penguin_clay --compare \
     --prompt examples/prompts/penguin.json --output ./examples/outputs/penguin
 
@@ -71,7 +75,6 @@ See `examples/prompts/penguin.json` for the schema:
 
 ## Roadmap
 
-- Advanced run configuration: declarative config files instead of long CLI flag lists.
 - Layer selection: train specific layer ranges or set per-layer rank/alpha, beyond the current module-family presets (which apply across all 34 layers).
 - High-resolution training: validated 768/1024 presets plus the memory tricks (gradient checkpointing, latent bucketing) to make it practical past the 512 demo default.
 - fp8 weights: use the `ideogram-4-fp8` build on H100 (FP8 tensor cores) for faster training and inference than the nf4 dequant path.

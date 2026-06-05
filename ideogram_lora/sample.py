@@ -102,12 +102,15 @@ def main() -> None:
 
     from ideogram4 import Ideogram4Pipeline, Ideogram4PipelineConfig
 
+    from .fast_init import no_init_weights
+
     print(f"Loading {args.model} (gated; downloads on first run) ...")
-    pipe = Ideogram4Pipeline.from_pretrained(
-        config=Ideogram4PipelineConfig(weights_repo=args.model),
-        device=device,
-        dtype=dtype,
-    )
+    with no_init_weights():  # the checkpoint overwrites every weight; skip the slow RNG init
+        pipe = Ideogram4Pipeline.from_pretrained(
+            config=Ideogram4PipelineConfig(weights_repo=args.model),
+            device=device,
+            dtype=dtype,
+        )
 
     if args.compare:
         from .make_grid import grid_from_images
